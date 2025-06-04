@@ -1,78 +1,122 @@
-from pynput import keyboard
-import interactive_terminal
+#!/usr/bin/env python3
+
 import asyncio
+import interactive_terminal
+import pyaudio
+import selectors
+import urwid
 
-def print_b():
-    print("B\n")
+def beep_callback(in_data,frame_count,time_info,status):
+    global nr_audio_callbacks_run
+    global stop_audio_loopback
 
-def print_d1():
-    print("D1\n")
+    sample = -1.0
+    data = list()
+    if nr_audio_callbacks_run > 50:
+        if stop_audio_loopback:
+            return (b'x00',pyaudio.paAbort) # End audio stream.
+        else:
+            nr_audio_callbacks_run = 0
+    for frame_index in range(frame_count * 2):
+        sample_word = int((sample + 1.0) / 2.0 * 65535)
+        data.append(int(sample_word / 255) % 255)
+        data.append(int(sample_word % 255))
+        next_sample = sample + 0.1 / (nr_audio_callbacks_run + 1)
+        sample = next_sample if next_sample < 1.0 else -1.0
+    nr_audio_callbacks_run += 1
+    return (bytes(data),pyaudio.paContinue)
 
-def print_d2():
-    print("D2\n")
+continue_playing_audio = False
+nr_audio_callbacks_run = 0
+pa = pyaudio.PyAudio()
+stream = pa.open(format=pa.get_format_from_width(2,True),
+                 channels=2,
+                 rate=44100,
+                 output=True,
+                 stream_callback=beep_callback)
+stream.stop_stream()
 
-def handler(key: str) -> bool:
-    print(key)
-    if key == "p":
-        return True # Exit.
-    return False # Continue
+async def stream_audio():
+    global stop_audio_loopback
+    global stream
 
-root_config = {
+    while stream.is_active():
+        await asyncio.sleep(0)
+
+    stream.start_stream()
+
+    while stream.is_active():
+        await asyncio.sleep(0)
+    
+    if stop_audio_loopback:
+        stream.stop_stream()
+
+def play_once(loop):
+    global nr_audio_callbacks_run
+    global stop_audio_loopback
+
+    nr_audio_callbacks_run = 0
+    stop_audio_loopback = True
+
+    asyncio.create_task(stream_audio())
+
+def play_continuously(loop):
+    global nr_audio_callbacks_run
+    global stop_audio_loopback
+    
+    nr_audio_callbacks_run = 0
+    stop_audio_loopback = False
+
+    asyncio.create_task(stream_audio())
+
+def stop_playing(loop):
+    global stop_audio_loopback
+    global stream
+
+    stop_audio_loopback = True
+    stream.stop_stream()
+
+root_config_new = {
     "description": "Main Menu",
     "activation_key": "l",
     "children": [
-        {
-            "activation_key": "d",
-            "description": "Print D1",
-            "action": print_d1
-        },
-        {
-            "activation_key": "e",
-            "description": "Echo",
-            "handler": handler
-        },
         {
             "activation_key": "a",
             "description": "Menu A",
             "children": [
                 {
-                    "activation_key": "b",
-                    "description": "Print B",
-                    "action": print_b
+                    "activation_key": "o",
+                    "description": "Make a noise once",
+                    "action": play_once
                 },
                 {
                     "activation_key": "c",
-                    "description": "Menu C",
-                    "children": [
-                        {
-                            "activation_key": "d",
-                            "description": "Print D2",
-                            "action": print_d2
-                        }
-                    ]
+                    "description": "Make a noise continuously",
+                    "action": play_continuously
+                },
+                {
+                    "activation_key": "s",
+                    "description": "Stop the noise",
+                    "action": stop_playing
                 }
             ]
         },
     ]
 }
 
-def transmit_keys():
-    queue = asyncio.Queue()
-    loop = asyncio.get_event_loop()
-    def on_release(key):
-        if hasattr(key,"char"):
-            loop.call_soon_threadsafe(queue.put_nowait,key.char)
-    keyboard.Listener(on_release=on_release).start()
-    return queue
+def key_handler(key):
+    global menu
+    if menu.press_key(key) == True:
+        raise urwid.ExitMainLoop()
 
-async def main():
-    root_menu = interactive_terminal.menu_item_new(root_config,None)
-    root_menu.activate()
-    key_queue = transmit_keys()
-    finished = False
-    while not finished:
-        key = await key_queue.get()
-        finished = root_menu.press_key(key)
+if __name__ == "__main__":
+    placeholder = urwid.SolidFill()
+    selector = selectors.SelectSelector()
+    async_loop = asyncio.SelectorEventLoop(selector)
+    urwid_async_loop = urwid.AsyncioEventLoop(loop=async_loop)
+    loop = urwid.MainLoop(placeholder,unhandled_input=key_handler,event_loop=urwid_async_loop)
 
-asyncio.run(main())
-exit()
+    menu = interactive_terminal.menu_item_new(root_config_new,None,loop)
+    menu.activate()
+
+    loop.run()
