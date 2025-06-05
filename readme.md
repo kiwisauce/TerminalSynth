@@ -10,9 +10,7 @@ Python modules:
 - pyaudio
 - urwid
 
-Please install the python modules as so:
-On Windows:
-Ensure python is installed and added to PATH and then run:
+Windows:
 ```console
 python -m pip install pyaudio
 python -m pip install urwid
@@ -20,11 +18,7 @@ python -m pip install urwid
 
 On Debian based Linux distibutions:
 ```console
-apt install build-essential
-apt install python3
-apt install portaudio19-dev
-apt install python3-pyaudio
-apt install python3-urwid
+apt install build-essential python3 portaudio19-dev python3-pyaudio python3-urwid
 ```
 
 ## Usage
