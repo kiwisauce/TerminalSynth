@@ -79,12 +79,48 @@ class Action(MenuItem):
     def activate(self):
         self._action(self._loop)
 
+class Interactive(MenuItem):
+    def __init__(self,config,parent,loop):
+        def default_activate(loop):
+            loop.widget = urwid.Filler(urwid.Pile([])) # Clear screen.
+
+        super().__init__(config,parent,loop)
+
+        self._key_handler = config["key_handler"]
+
+        if "activate" in config:
+            self._activate = config["activate"]
+        else:
+            self._activate = default_activate
+
+        self .__deactivate = None
+        if "deactivate" in config:
+            self.__deactivate =  config["deactivate"]
+
+        if not inspect.isfunction(self._key_handler):
+            ValueError('"key_handler" must be a function')
+
+    def activate(self):
+        self._activate(self._loop)
+
+    def _deactivate(self) -> None:
+        super()._deactivate()
+        if self.__deactivate is not None:
+            self.__deactivate(self._loop)
+
+    def press_key(self,key: str) -> bool:
+        if super().press_key(key) == False:
+            self._key_handler(self._loop,key)
+
 def menu_item_new(config,parent,loop):
     if "children" in config:
-        assert "action" not in config and "handler" not in config
+        assert "action" not in config and "key_handler" not in config
         return Menu(config,parent,loop)
     elif "action" in config:
-        assert "children" not in config and "handler" not in config
+        assert "children" not in config and "key_handler" not in config
         return Action(config,parent,loop)
+    elif "key_handler" in config:
+        assert "children" not in config and "action" not in config
+        return Interactive(config,parent,loop)
     else:
         assert False
