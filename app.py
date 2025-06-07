@@ -173,6 +173,10 @@ root_config_new = {
 
 def key_handler(key):
     global menu
+
+    if len(key) > 1:
+        return # Ignore mouse clicks
+
     if menu.press_key(key) == True:
         raise urwid.ExitMainLoop()
 
