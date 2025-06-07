@@ -101,6 +101,9 @@ class Interactive(MenuItem):
             ValueError('"key_handler" must be a function')
 
     def activate(self):
+        if self._parent is not None:
+            self._parent.active = False
+        self.active = True
         self._activate(self._loop)
 
     def _deactivate(self) -> None:
@@ -109,7 +112,7 @@ class Interactive(MenuItem):
             self.__deactivate(self._loop)
 
     def press_key(self,key: str) -> bool:
-        if super().press_key(key) == False:
+        if super().press_key(key) == False and self.active:
             self._key_handler(self._loop,key)
 
 def menu_item_new(config,parent,loop):
