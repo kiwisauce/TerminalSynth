@@ -6,17 +6,6 @@ import pyaudio
 import selectors
 import urwid
 
-# Globals
-continue_playing_audio = False
-nr_audio_callbacks_run = 0
-pa = pyaudio.PyAudio()
-stream = pa.open(format=pa.get_format_from_width(2,True),
-                 channels=2,
-                 rate=44100,
-                 output=True,
-                 stream_callback=beep_callback)
-stream.stop_stream()
-
 def play_callback(in_data,frame_count,time_info,status):
     global nr_audio_callbacks_run
     global stop_audio_loopback
@@ -36,6 +25,19 @@ def play_callback(in_data,frame_count,time_info,status):
         sample = next_sample if next_sample < 1.0 else -1.0
     nr_audio_callbacks_run += 1
     return (bytes(data),pyaudio.paContinue)
+
+# Globals
+continue_playing_audio = False
+nr_audio_callbacks_run = 0
+pa = pyaudio.PyAudio()
+stream = pa.open(format=pa.get_format_from_width(2,True),
+                 channels=2,
+                 rate=44100,
+                 output=True,
+                 stream_callback=play_callback)
+stream.stop_stream()
+octave = 1
+piano_key_nr = 0
 
 async def stream_audio():
     global stop_audio_loopback
@@ -117,7 +119,7 @@ def keyboard_key_to_piano_key_nr(key: str) -> int:
     if key.upper() not in note_index_from_keyboard_keys:
         return -1 # Something else can handle this key.
 
-    note_index = note_index_from_keyboard_keys(key.upper())
+    note_index = note_index_from_keyboard_keys[key.upper()]
     note_index_root_c = octave * 12 - 8
     return note_index_root_c + note_index
 
