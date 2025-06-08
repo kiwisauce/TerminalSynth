@@ -6,6 +6,21 @@ import pyaudio
 import selectors
 import urwid
 
+def null_callback(in_data,frame_count,time_info,status):
+    return (b'x00',pyaudio.paAbort) # End audio stream.
+
+# Globals
+continue_playing_audio = False
+nr_audio_callbacks_run = 0
+stop_audio_loopback = True
+pa = pyaudio.PyAudio()
+stream = pa.open(format=pa.get_format_from_width(2,True),
+                channels=1,
+                rate=44100,
+                output=True,
+                stream_callback=null_callback)
+stream.stop_stream()
+stream.close()
 def play_callback(in_data,frame_count,time_info,status):
     global nr_audio_callbacks_run
     global stop_audio_loopback
@@ -26,16 +41,6 @@ def play_callback(in_data,frame_count,time_info,status):
     nr_audio_callbacks_run += 1
     return (bytes(data),pyaudio.paContinue)
 
-# Globals
-continue_playing_audio = False
-nr_audio_callbacks_run = 0
-pa = pyaudio.PyAudio()
-stream = pa.open(format=pa.get_format_from_width(2,True),
-                 channels=2,
-                 rate=44100,
-                 output=True,
-                 stream_callback=play_callback)
-stream.stop_stream()
 octave = 1
 piano_key_nr = 0
 
@@ -43,9 +48,7 @@ async def stream_audio():
     global stop_audio_loopback
     global stream
 
-    while stream.is_active():
-        await asyncio.sleep(0)
-
+    stream.stop_stream()
     stream.start_stream()
 
     while stream.is_active():
@@ -78,6 +81,20 @@ def stop_playing(loop):
 
     stop_audio_loopback = True
     stream.stop_stream()
+
+def play_activate(loop):
+    global stream
+
+    stream = pa.open(format=pa.get_format_from_width(2,True),
+                    channels=1,
+                    rate=44100,
+                    output=True,
+                    stream_callback=play_callback)
+    stream.stop_stream()
+
+def play_deactivate(loop):
+    stream.stop_stream()
+    stream.close()
 
 def piano_key_nr_to_string(piano_key_nr: int) -> str:
     note_strings = {
@@ -181,6 +198,8 @@ root_config_new = {
         {
             "activation_key": "a",
             "description": "Play Loop / Oneshot",
+            "activate": play_activate,
+            "deactivate": play_deactivate,
             "children": [
                 {
                     "activation_key": "o",
