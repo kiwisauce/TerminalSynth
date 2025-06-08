@@ -21,6 +21,10 @@ stream = pa.open(format=pa.get_format_from_width(2,True),
                 stream_callback=null_callback)
 stream.stop_stream()
 stream.close()
+octave = 1
+piano_key_nr = 0
+slope = 0.0
+
 def play_callback(in_data,frame_count,time_info,status):
     global nr_audio_callbacks_run
     global stop_audio_loopback
@@ -40,9 +44,6 @@ def play_callback(in_data,frame_count,time_info,status):
         sample = next_sample if next_sample < 1.0 else -1.0
     nr_audio_callbacks_run += 1
     return (bytes(data),pyaudio.paContinue)
-
-octave = 1
-piano_key_nr = 0
 
 async def stream_audio():
     global stop_audio_loopback
@@ -146,15 +147,13 @@ def piano_roll_callback(in_data,frame_count,time_info,status):
 
     data = list()
 
-    frequency_hz = 440.0 * pow(1.059463,piano_key_nr - 49)
-    slope = 65535.0 * frequency_hz / 44100.0
-    
+    _sample = sample
     for frame_index in range(frame_count * 2):
-        data.append(int(int(sample) / 255) % 255)
-        data.append(int(int(sample) % 255))
-        next_sample = sample + slope
-        sample = next_sample if next_sample < 65535.0 else 0.0
+        data.append(int(_sample))
+        next_sample = _sample + slope
+        _sample = next_sample if next_sample <= 255.0 else 0.0
 
+    sample = _sample
     return (bytes(data),pyaudio.paContinue)
 
 def piano_roll_activate(loop):
@@ -164,10 +163,11 @@ def piano_roll_activate(loop):
 
     sample = 0.0
 
-    stream = pa.open(format=pa.get_format_from_width(2,True),
-                    channels=2,
+    stream = pa.open(format=pa.get_format_from_width(1,True),
+                    channels=1,
                     rate=44100,
                     output=True,
+                    frames_per_buffer=4096,
                     stream_callback=piano_roll_callback)
 
 def piano_roll_deactivate(loop):
@@ -177,11 +177,14 @@ def piano_roll_deactivate(loop):
     stream.close()
 
 def piano_roll_key_handler(loop,key):
+    global slope
     global piano_key_nr
     global octave
     
     if keyboard_key_to_piano_key_nr(key) != -1:
         piano_key_nr = keyboard_key_to_piano_key_nr(key)
+        frequency_hz = 440.0 * pow(1.059463,piano_key_nr - 49)
+        slope = 255.0 * frequency_hz / 44100.0
 
     if key.upper() == "Z" and octave > 1:
         octave -= 1
