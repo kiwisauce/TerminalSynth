@@ -40,6 +40,14 @@ class Menu(MenuItem):
         for child_config in config["children"]:
             child = menu_item_new(child_config,self,self._loop)
             self._children.append(child)
+
+        self._activate = None
+        self.__deactivate = None
+        if "activate" in config:
+            self._activate = config["activate"]
+        if "deactivate" in config:
+            self.__deactivate = config["deactivate"]
+        
     
     def press_key(self,key) -> bool:
         finished = super().press_key(key)
@@ -68,6 +76,13 @@ class Menu(MenuItem):
 
         self._loop.widget = urwid.Filler(pile)
         self.active = True
+        if self._activate is not None:
+            self._activate(self._loop)
+
+    def _deactivate(self) -> None:
+        super()._deactivate()
+        if self.__deactivate is not None:
+            self.__deactivate(self._loop)
 
 class Action(MenuItem):
     def __init__(self,config,parent,loop):
