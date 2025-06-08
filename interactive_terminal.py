@@ -47,8 +47,7 @@ class Menu(MenuItem):
             self._activate = config["activate"]
         if "deactivate" in config:
             self.__deactivate = config["deactivate"]
-        
-    
+
     def press_key(self,key) -> bool:
         finished = super().press_key(key)
         
