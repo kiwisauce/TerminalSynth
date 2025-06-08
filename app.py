@@ -123,6 +123,42 @@ def keyboard_key_to_piano_key_nr(key: str) -> int:
     note_index_root_c = octave * 12 - 8
     return note_index_root_c + note_index
 
+def piano_roll_callback(in_data,frame_count,time_info,status):
+    global piano_key_nr
+    global sample
+
+    data = list()
+
+    frequency_hz = 440.0 * pow(1.059463,piano_key_nr - 49)
+    slope = 65535.0 * frequency_hz / 44100.0
+    
+    for frame_index in range(frame_count * 2):
+        data.append(int(int(sample) / 255) % 255)
+        data.append(int(int(sample) % 255))
+        next_sample = sample + slope
+        sample = next_sample if next_sample < 65535.0 else 0.0
+
+    return (bytes(data),pyaudio.paContinue)
+
+def piano_roll_activate(loop):
+    global pa
+    global stream
+    global sample
+
+    sample = 0.0
+
+    stream = pa.open(format=pa.get_format_from_width(2,True),
+                    channels=2,
+                    rate=44100,
+                    output=True,
+                    stream_callback=piano_roll_callback)
+
+def piano_roll_deactivate(loop):
+    global stream
+
+    stream.stop_stream()
+    stream.close()
+
 def piano_roll_key_handler(loop,key):
     global piano_key_nr
     global octave
@@ -166,7 +202,9 @@ root_config_new = {
         {
             "activation_key": "0",
             "description": "Play Piano Roll",
-            "key_handler": piano_roll_key_handler
+            "key_handler": piano_roll_key_handler,
+            "activate": piano_roll_activate,
+            "deactivate": piano_roll_deactivate
         }
     ]
 }
