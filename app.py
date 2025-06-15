@@ -2,11 +2,16 @@
 
 import asyncio
 import interactive_terminal
-import pyaudio
+import numpy as np
 import selectors
+import sounddevice as sd
 import urwid
 
 # Globals
+octave = 4
+piano_key_nr = 49
+frequency_hz = 440.0
+prev_sample = -0.5
 
 def piano_key_nr_to_string(piano_key_nr: int) -> str:
     note_strings = {
@@ -52,55 +57,60 @@ def keyboard_key_to_piano_key_nr(key: str) -> int:
     note_index_root_c = octave * 12 - 8
     return note_index_root_c + note_index
 
-def piano_roll_callback(in_data,frame_count,time_info,status):
-    global piano_key_nr
-    global sample
+def piano_roll_callback(outdata,frames,time,status):
+    global frequency_hz
+    global prev_sample
 
-    data = list()
+    samples_per_period = int(44100 / frequency_hz)
 
-    _sample = sample
-    for frame_index in range(frame_count * 2):
-        data.append(int(_sample))
-        next_sample = _sample + slope
-        _sample = next_sample if next_sample <= 255.0 else 0.0
+    samples_left = samples_per_period - (samples_per_period * ((prev_sample + 0.5) / 1.0))
 
-    sample = _sample
-    return (bytes(data),pyaudio.paContinue)
+    single_sawtooth_waveform = np.linspace(-0.5,0.5,samples_per_period).reshape(samples_per_period,1)
+
+    samples_left = min(int(samples_per_period - (samples_per_period * ((prev_sample + 0.5) / 1.0))),frames)
+    partial_waveform = np.linspace(prev_sample,0.5,samples_left).reshape(samples_left,1)
+    remaining_waveform = np.resize(single_sawtooth_waveform,frames - samples_left).reshape(frames - samples_left,1)
+    waveform = np.concatenate([partial_waveform,remaining_waveform])
+
+    outdata[:] = waveform[:frames].reshape(frames,1)
+    prev_sample = outdata[-1].item()
+
+async def task_finished():
+    while stream_continue == True:
+        await asyncio.sleep(0)
+
+async def piano_roll_task():
+    with sd.OutputStream(callback=piano_roll_callback,samplerate=44100,channels=1):
+        await task_finished()
 
 def piano_roll_activate(loop):
-    global pa
-    global stream
-    global sample
+    global stream_continue
+    global prev_sample
 
-    sample = 0.0
+    prev_sample = -0.5
 
-    stream = pa.open(format=pa.get_format_from_width(1,True),
-                    channels=1,
-                    rate=44100,
-                    output=True,
-                    frames_per_buffer=4096,
-                    stream_callback=piano_roll_callback)
+    stream_continue = True
+
+    asyncio.create_task(piano_roll_task())
 
 def piano_roll_deactivate(loop):
-    global stream
+    global stream_continue
 
-    stream.stop_stream()
-    stream.close()
+    stream_continue = False
 
 def piano_roll_key_handler(loop,key):
-    global slope
+    global frequency_hz
     global piano_key_nr
     global octave
-    
-    if keyboard_key_to_piano_key_nr(key) != -1:
-        piano_key_nr = keyboard_key_to_piano_key_nr(key)
-        frequency_hz = 440.0 * pow(1.059463,piano_key_nr - 49)
-        slope = 255.0 * frequency_hz / 44100.0
 
     if key.upper() == "Z" and octave > 1:
         octave -= 1
     if key.upper() == "X" and octave < 6:
         octave += 1
+    if keyboard_key_to_piano_key_nr(key) != -1:
+        piano_key_nr = keyboard_key_to_piano_key_nr(key)
+
+    frequency_hz = 440.0 * pow(1.059463,piano_key_nr - 49)
 
     note_text = urwid.Text(piano_key_nr_to_string(piano_key_nr),align="center")
     loop.widget = urwid.Filler(note_text)
