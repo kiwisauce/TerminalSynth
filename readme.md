@@ -12,13 +12,17 @@ Python modules:
 
 Windows:
 ```console
-python -m pip install pyaudio
+python -m pip install sounddevice
 python -m pip install urwid
+python -m pip install numpy
 ```
 
 On Debian based Linux distibutions:
 ```console
-apt install build-essential python3 portaudio19-dev python3-pyaudio python3-urwid
+apt install build-essential python3 portaudio19-dev python3-venv
+python3 -m venv ./.venv
+source .venv/bin/activate
+pip install sounddevice urwid numpy
 ```
 
 ## Usage
