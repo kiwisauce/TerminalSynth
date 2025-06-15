@@ -48,6 +48,7 @@ def keyboard_key_to_piano_key_nr(key: str) -> int:
         "H": 9,  # A
         "U": 10, # A#
         "J": 11, # B
+        "K": 12, # C
     }
 
     if key.upper() not in note_index_from_keyboard_keys:
