@@ -106,15 +106,22 @@ def piano_roll_key_handler(loop,key):
 
     if key.upper() == "Z" and octave > 1:
         octave -= 1
+        piano_key_nr -= 12
     if key.upper() == "X" and octave < 6:
         octave += 1
+        piano_key_nr += 12
+
     if keyboard_key_to_piano_key_nr(key) != -1:
         piano_key_nr = keyboard_key_to_piano_key_nr(key)
 
     frequency_hz = 440.0 * pow(1.059463,piano_key_nr - 49)
 
-    note_text = urwid.Text(piano_key_nr_to_string(piano_key_nr),align="center")
-    loop.widget = urwid.Filler(note_text)
+    note_text = urwid.Text(f"Note: {piano_key_nr_to_string(piano_key_nr)}",align="center")
+    octave_down_text = urwid.Text("Z: Octave down",align="left")
+    octave_up_text = urwid.Text("X: Octave up",align="left")
+    exit_text = urwid.Text("Q: Stop audio",align="left")
+    pile = urwid.Pile([note_text,octave_down_text,octave_up_text,exit_text])
+    loop.widget = urwid.Filler(pile)
 
 root_config_new = {
     "description": "Main Menu",
