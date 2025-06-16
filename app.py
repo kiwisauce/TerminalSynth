@@ -12,6 +12,8 @@ octave = 4
 piano_key_nr = 49
 frequency_hz = 440.0
 prev_sample = -0.5
+kick_mode_active = False
+kick_frequency_hz = 10000.0
 
 def piano_key_nr_to_string(piano_key_nr: int) -> str:
     note_strings = {
@@ -59,10 +61,18 @@ def keyboard_key_to_piano_key_nr(key: str) -> int:
     return note_index_root_c + note_index
 
 def piano_roll_callback(outdata,frames,time,status):
+    global kick_mode_active
+    global kick_frequency_hz
     global frequency_hz
     global prev_sample
 
-    samples_per_period = int(44100 / frequency_hz)
+    if kick_frequency_hz <= frequency_hz:
+        kick_frequency_hz = 10000.0
+
+    if kick_mode_active:
+        samples_per_period = int(44100 / kick_frequency_hz)
+    else:
+        samples_per_period = int(44100 / frequency_hz)
 
     samples_left = samples_per_period - (samples_per_period * ((prev_sample + 0.5) / 1.0))
 
@@ -70,8 +80,19 @@ def piano_roll_callback(outdata,frames,time,status):
 
     samples_left = min(int(samples_per_period - (samples_per_period * ((prev_sample + 0.5) / 1.0))),frames)
     partial_waveform = np.linspace(prev_sample,0.5,samples_left).reshape(samples_left,1)
-    remaining_waveform = np.resize(single_sawtooth_waveform,frames - samples_left).reshape(frames - samples_left,1)
-    waveform = np.concatenate([partial_waveform,remaining_waveform])
+
+    if kick_mode_active:
+        remaining_samples = frames - samples_left
+        waveform = partial_waveform
+        while remaining_samples > 0:
+            kick_frequency_hz *= 0.92
+            samples_per_period = int(44100 / kick_frequency_hz)
+            single_sawtooth_waveform = np.linspace(-0.5,0.5,samples_per_period).reshape(samples_per_period,1)
+            waveform = np.concatenate([waveform,single_sawtooth_waveform])
+            remaining_samples -= samples_per_period
+    else:
+        remaining_waveform = np.resize(single_sawtooth_waveform,frames - samples_left).reshape(frames - samples_left,1)
+        waveform = np.concatenate([partial_waveform,remaining_waveform])
 
     outdata[:] = waveform[:frames].reshape(frames,1)
     prev_sample = outdata[-1].item()
@@ -123,6 +144,16 @@ def piano_roll_key_handler(loop,key):
     pile = urwid.Pile([note_text,octave_down_text,octave_up_text,exit_text])
     loop.widget = urwid.Filler(pile)
 
+def kick_mode_activate(loop):
+    global kick_mode_active
+
+    kick_mode_active = True
+
+def kick_mode_deactivate(loop):
+    global kick_mode_active
+
+    kick_mode_active = False
+
 root_config_new = {
     "description": "Main Menu",
     "activation_key": "l",
@@ -133,7 +164,17 @@ root_config_new = {
             "key_handler": piano_roll_key_handler,
             "activate": piano_roll_activate,
             "deactivate": piano_roll_deactivate
-        }
+        },
+        {
+            "activation_key": "9",
+            "description": "Activate Kick Mode",
+            "action": kick_mode_activate,
+        },
+        {
+            "activation_key": "8",
+            "description": "Dectivate Kick Mode",
+            "action": kick_mode_deactivate,
+        },
     ]
 }
 
