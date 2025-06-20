@@ -12,6 +12,7 @@ octave = 4
 piano_key_nr = 49
 frequency_hz = 440.0
 prev_sample = -0.5
+prev_sine_progress = 0.0
 kick_mode_active = False
 kick_frequency_hz = 10000.0
 
@@ -65,6 +66,7 @@ def piano_roll_callback(outdata,frames,time,status):
     global kick_frequency_hz
     global frequency_hz
     global prev_sample
+    global prev_sine_progress
 
     if kick_frequency_hz <= frequency_hz:
         kick_frequency_hz = 10000.0
@@ -76,10 +78,15 @@ def piano_roll_callback(outdata,frames,time,status):
 
     samples_left = samples_per_period - (samples_per_period * ((prev_sample + 0.5) / 1.0))
 
+    single_sine_waveform = np.linspace(0,np.pi * 2,samples_per_period)
+    for x in np.nditer(single_sine_waveform,op_flags=["readwrite"]):
+        x[...] = np.sin(x)
+
     single_sawtooth_waveform = np.linspace(-0.5,0.5,samples_per_period).reshape(samples_per_period,1)
 
-    samples_left = min(int(samples_per_period - (samples_per_period * ((prev_sample + 0.5) / 1.0))),frames)
-    partial_waveform = np.linspace(prev_sample,0.5,samples_left).reshape(samples_left,1)
+    partial_waveform = np.linspace(2 * np.pi * prev_sine_progress,2 * np.pi,int(samples_per_period - prev_sine_progress * samples_per_period))
+    for x in np.nditer(partial_waveform,op_flags=["readwrite"]):
+        x[...] = np.sin(x)
 
     if kick_mode_active:
         remaining_samples = frames - samples_left
@@ -91,8 +98,15 @@ def piano_roll_callback(outdata,frames,time,status):
             waveform = np.concatenate([waveform,single_sawtooth_waveform])
             remaining_samples -= samples_per_period
     else:
-        remaining_waveform = np.resize(single_sawtooth_waveform,frames - samples_left).reshape(frames - samples_left,1)
-        waveform = np.concatenate([partial_waveform,remaining_waveform])
+        waveform = partial_waveform
+        remaining_samples = frames - len(partial_waveform)
+
+        while remaining_samples > samples_per_period:
+            waveform = np.concatenate([waveform,single_sine_waveform])
+            remaining_samples -= samples_per_period
+
+        waveform = np.concatenate([waveform,single_sine_waveform[0:remaining_samples]])
+        prev_sine_progress = remaining_samples / samples_per_period
 
     outdata[:] = waveform[:frames].reshape(frames,1)
     prev_sample = outdata[-1].item()
