@@ -63,7 +63,10 @@ def keyboard_key_to_piano_key_nr(key: str) -> int:
 
 def generate_sine_waveform(samples_per_period,**kwargs):
     def sine(x):
-        return np.sin(x)
+        if kick_mode_active:
+            return np.clip(4 * np.sin(x),-1.0,1.0)
+        else:
+            return np.sin(x)
 
     start = kwargs["start"] if "start" in kwargs else 0
     end = np.pi * 2
