@@ -15,6 +15,7 @@ prev_sample = -0.5
 prev_sine_progress = 0.0
 kick_mode_active = False
 kick_frequency_hz = 10000.0
+kick_decay = 0.5
 
 def piano_key_nr_to_string(piano_key_nr: int) -> str:
     note_strings = {
@@ -78,7 +79,25 @@ def generate_sine_waveform(samples_per_period,**kwargs):
     sample_indexes = np.linspace(start,end,nr_samples)
     return np.apply_along_axis(sine,axis=0,arr=sample_indexes)
 
+def calculate_kick_decay(start_frequency_hz: float,end_frequency_hz: float,nr_samples: int):
+    nr_samples_delta = 250
+    decay_guess = 0.5
+    while True:
+        nr_samples_processed = 0
+        frequency_hz = start_frequency_hz
+        while frequency_hz > end_frequency_hz:
+            samples_per_period = int(44100 / frequency_hz)
+            nr_samples_processed += samples_per_period
+            frequency_hz *= decay_guess
+        if nr_samples_processed > nr_samples + nr_samples_delta:
+            decay_guess -= 0.000001
+        elif nr_samples_processed < nr_samples - nr_samples_delta:
+            decay_guess += 0.000001
+        else:
+            return decay_guess
+
 def piano_roll_callback(outdata,frames,time,status):
+    global kick_decay
     global kick_mode_active
     global kick_frequency_hz
     global end_frequency_hz
@@ -106,7 +125,7 @@ def piano_roll_callback(outdata,frames,time,status):
         if kick_mode_active:
             samples_per_period = int(44100 / kick_frequency_hz)
             full_sine_waveform = generate_sine_waveform(samples_per_period=samples_per_period)
-            kick_frequency_hz *= 0.92
+            kick_frequency_hz *= kick_decay
 
         waveform = np.concatenate([waveform,full_sine_waveform])
         remaining_samples_in_callback -= samples_per_period
@@ -116,6 +135,8 @@ def piano_roll_callback(outdata,frames,time,status):
     # next callback so we can generate the remainder of the waveform in the next callback.
     prev_sine_progress = remaining_samples_in_callback / samples_per_period
 
+    if kick_mode_active:
+        kick_frequency_hz *= kick_decay
     outdata[:] = waveform[:frames].reshape(frames,1)
 
 async def task_finished():
@@ -142,6 +163,8 @@ def piano_roll_deactivate(loop):
     stream_continue = False
 
 def piano_roll_key_handler(loop,key):
+    global kick_decay
+    global kick_mode_active
     global end_frequency_hz
     global piano_key_nr
     global octave
@@ -157,6 +180,10 @@ def piano_roll_key_handler(loop,key):
         piano_key_nr = keyboard_key_to_piano_key_nr(key)
 
     end_frequency_hz = 440.0 * pow(1.059463,piano_key_nr - 49)
+    if kick_mode_active:
+        kick_decay = calculate_kick_decay(start_frequency_hz = kick_start_frequency_hz,
+                                          end_frequency_hz = end_frequency_hz,
+                                          nr_samples = int(44100 * 0.25))
 
     note_text = urwid.Text(f"Note: {piano_key_nr_to_string(piano_key_nr)}",align="center")
     octave_down_text = urwid.Text("Z: Octave down",align="left")
