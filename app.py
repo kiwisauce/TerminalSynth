@@ -61,14 +61,27 @@ def keyboard_key_to_piano_key_nr(key: str) -> int:
     note_index_root_c = octave * 12 - 8
     return note_index_root_c + note_index
 
+def generate_sine_waveform(samples_per_period,**kwargs):
+    def sine(x):
+        return np.sin(x)
+
+    start = kwargs["start"] if "start" in kwargs else 0
+    end = np.pi * 2
+
+    nr_samples = int(samples_per_period * (1 - start / (2 * np.pi)))
+    if nr_samples < 1:
+        return np.array([])
+
+    sample_indexes = np.linspace(start,end,nr_samples)
+    return np.apply_along_axis(sine,axis=0,arr=sample_indexes)
+
 def piano_roll_callback(outdata,frames,time,status):
     global kick_mode_active
     global kick_frequency_hz
     global frequency_hz
-    global prev_sample
     global prev_sine_progress
 
-    if kick_frequency_hz <= frequency_hz:
+    if kick_frequency_hz < frequency_hz:
         kick_frequency_hz = 10000.0
 
     if kick_mode_active:
@@ -76,40 +89,31 @@ def piano_roll_callback(outdata,frames,time,status):
     else:
         samples_per_period = int(44100 / frequency_hz)
 
-    samples_left = samples_per_period - (samples_per_period * ((prev_sample + 0.5) / 1.0))
+    # Generate the remainder of the waveform that was abandoned when we ran out of frames in the previous callback.
+    remainder_sine_waveform = generate_sine_waveform(samples_per_period,start = prev_sine_progress * np.pi * 2)
+    full_sine_waveform = generate_sine_waveform(samples_per_period)
 
-    single_sine_waveform = np.linspace(0,np.pi * 2,samples_per_period)
-    for x in np.nditer(single_sine_waveform,op_flags=["readwrite"]):
-        x[...] = np.sin(x)
+    remaining_samples_in_callback = frames
 
-    single_sawtooth_waveform = np.linspace(-0.5,0.5,samples_per_period).reshape(samples_per_period,1)
+    # Start with the remainder.
+    waveform = remainder_sine_waveform
+    remaining_samples_in_callback -= len(waveform)
 
-    partial_waveform = np.linspace(2 * np.pi * prev_sine_progress,2 * np.pi,int(samples_per_period - prev_sine_progress * samples_per_period))
-    for x in np.nditer(partial_waveform,op_flags=["readwrite"]):
-        x[...] = np.sin(x)
-
-    if kick_mode_active:
-        remaining_samples = frames - samples_left
-        waveform = partial_waveform
-        while remaining_samples > 0:
-            kick_frequency_hz *= 0.92
+    while remaining_samples_in_callback > samples_per_period:
+        if kick_mode_active:
             samples_per_period = int(44100 / kick_frequency_hz)
-            single_sawtooth_waveform = np.linspace(-0.5,0.5,samples_per_period).reshape(samples_per_period,1)
-            waveform = np.concatenate([waveform,single_sawtooth_waveform])
-            remaining_samples -= samples_per_period
-    else:
-        waveform = partial_waveform
-        remaining_samples = frames - len(partial_waveform)
+            full_sine_waveform = generate_sine_waveform(samples_per_period=samples_per_period)
+            kick_frequency_hz *= 0.92
 
-        while remaining_samples > samples_per_period:
-            waveform = np.concatenate([waveform,single_sine_waveform])
-            remaining_samples -= samples_per_period
+        waveform = np.concatenate([waveform,full_sine_waveform])
+        remaining_samples_in_callback -= samples_per_period
 
-        waveform = np.concatenate([waveform,single_sine_waveform[0:remaining_samples]])
-        prev_sine_progress = remaining_samples / samples_per_period
+    waveform = np.concatenate([waveform,full_sine_waveform[0:remaining_samples_in_callback]])
+    # We must abandon the waveform as we have run out of frames. Store our progress for the 
+    # next callback so we can generate the remainder of the waveform in the next callback.
+    prev_sine_progress = remaining_samples_in_callback / samples_per_period
 
     outdata[:] = waveform[:frames].reshape(frames,1)
-    prev_sample = outdata[-1].item()
 
 async def task_finished():
     while stream_continue == True:
