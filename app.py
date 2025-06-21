@@ -10,7 +10,7 @@ import urwid
 # Globals
 octave = 4
 piano_key_nr = 49
-frequency_hz = 440.0
+end_frequency_hz = 440.0
 prev_sample = -0.5
 prev_sine_progress = 0.0
 kick_mode_active = False
@@ -81,7 +81,7 @@ def generate_sine_waveform(samples_per_period,**kwargs):
 def piano_roll_callback(outdata,frames,time,status):
     global kick_mode_active
     global kick_frequency_hz
-    global frequency_hz
+    global end_frequency_hz
     global prev_sine_progress
 
     if kick_frequency_hz < frequency_hz:
@@ -90,7 +90,7 @@ def piano_roll_callback(outdata,frames,time,status):
     if kick_mode_active:
         samples_per_period = int(44100 / kick_frequency_hz)
     else:
-        samples_per_period = int(44100 / frequency_hz)
+        samples_per_period = int(44100 / end_frequency_hz)
 
     # Generate the remainder of the waveform that was abandoned when we ran out of frames in the previous callback.
     remainder_sine_waveform = generate_sine_waveform(samples_per_period,start = prev_sine_progress * np.pi * 2)
@@ -142,7 +142,7 @@ def piano_roll_deactivate(loop):
     stream_continue = False
 
 def piano_roll_key_handler(loop,key):
-    global frequency_hz
+    global end_frequency_hz
     global piano_key_nr
     global octave
 
@@ -156,7 +156,7 @@ def piano_roll_key_handler(loop,key):
     if keyboard_key_to_piano_key_nr(key) != -1:
         piano_key_nr = keyboard_key_to_piano_key_nr(key)
 
-    frequency_hz = 440.0 * pow(1.059463,piano_key_nr - 49)
+    end_frequency_hz = 440.0 * pow(1.059463,piano_key_nr - 49)
 
     note_text = urwid.Text(f"Note: {piano_key_nr_to_string(piano_key_nr)}",align="center")
     octave_down_text = urwid.Text("Z: Octave down",align="left")
