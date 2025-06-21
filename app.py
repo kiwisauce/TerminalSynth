@@ -184,6 +184,8 @@ def piano_roll_activate(loop):
 
     stream_continue = True
 
+    piano_roll_key_handler(loop,"foo")
+
     asyncio.create_task(piano_roll_task())
 
 def piano_roll_deactivate(loop):
@@ -260,7 +262,7 @@ root_config_new = {
 def key_handler(key):
     global menu
 
-    if len(key) > 1:
+    if len(key) > 5:
         return # Ignore mouse clicks
 
     if menu.press_key(key) == True:

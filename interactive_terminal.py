@@ -36,10 +36,18 @@ class MenuItem(ABC):
 class Menu(MenuItem):
     def __init__(self,config,parent,loop) -> None:
         super().__init__(config,parent,loop)
+
+        self._max_child_info_length = 0
         self._children = list()
         for child_config in config["children"]:
             child = menu_item_new(child_config,self,self._loop)
             self._children.append(child)
+
+            child_info_length = len(child.get_info())
+            if child_info_length > self._max_child_info_length:
+                self._max_child_info_length = child_info_length
+
+        self._selection_idx = 0
 
         self._activate = None
         self.__deactivate = None
@@ -54,6 +62,22 @@ class Menu(MenuItem):
         for child in self._children:
             child.press_key(key)
 
+        if key == "up":
+            if self._selection_idx == 0:
+                self._selection_idx = len(self._children) - 1
+            else:
+                self._selection_idx -= 1
+            self.activate()
+        if key == "down":
+            if self._selection_idx == len(self._children) - 1:
+                self._selection_idx = 0
+            else:
+                self._selection_idx += 1
+            self.activate()
+
+        if key == "enter":
+            self._children[self._selection_idx].activate()
+
         return finished
 
     def activate(self) -> None:
@@ -62,7 +86,12 @@ class Menu(MenuItem):
         div = urwid.Divider()
         pile = urwid.Pile([title,div])
         for child in self._children:
-            option = urwid.Text(child.get_info())
+            if self._children[self._selection_idx] is child:
+                rjust_width = 5 + self._max_child_info_length - len(child.get_info())
+                selection_string = "<---".rjust(rjust_width)
+            else:
+                selection_string = ""
+            option = urwid.Text(f"{child.get_info()}{selection_string}")
             pile.contents.append((option,pile.options()))
 
         if self._parent is not None:
