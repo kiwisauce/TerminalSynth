@@ -223,7 +223,9 @@ def piano_roll_key_handler(loop,key):
 
 def kick_mode_activate(loop):
     global kick_mode_active
+    global piano_key_nr
 
+    piano_key_nr = 13
     kick_mode_active = True
 
 def kick_mode_deactivate(loop):
