@@ -14,8 +14,14 @@ end_frequency_hz = 440.0
 prev_sample = -0.5
 prev_sine_progress = 0.0
 kick_mode_active = False
-kick_frequency_hz = 10000.0
+kick_start_frequency_hz = 5000
+kick_frequency_hz = kick_start_frequency_hz
+kick_hold_samples = int(44100 * 0.1)
 kick_decay = 0.5
+kick_finished_hold = False
+kick_holding = False
+nr_samples_kick_held = 0
+
 
 def piano_key_nr_to_string(piano_key_nr: int) -> str:
     note_strings = {
@@ -98,13 +104,24 @@ def calculate_kick_decay(start_frequency_hz: float,end_frequency_hz: float,nr_sa
 
 def piano_roll_callback(outdata,frames,time,status):
     global kick_decay
+    global kick_hold_samples
     global kick_mode_active
     global kick_frequency_hz
+    global kick_start_frequency_hz
     global end_frequency_hz
     global prev_sine_progress
 
-    if kick_frequency_hz < frequency_hz:
-        kick_frequency_hz = 10000.0
+    global kick_finished_hold
+    global kick_holding
+    global nr_samples_kick_held
+
+    if kick_frequency_hz < end_frequency_hz and kick_finished_hold == False:
+        kick_holding = True
+    if kick_frequency_hz < end_frequency_hz and kick_finished_hold:
+        kick_finished_hold = False
+        kick_holding = False
+        nr_samples_kick_held = 0
+        kick_frequency_hz = kick_start_frequency_hz
 
     if kick_mode_active:
         samples_per_period = int(44100 / kick_frequency_hz)
@@ -122,10 +139,16 @@ def piano_roll_callback(outdata,frames,time,status):
     remaining_samples_in_callback -= len(waveform)
 
     while remaining_samples_in_callback > samples_per_period:
-        if kick_mode_active:
+        if kick_mode_active and kick_holding == False:
             samples_per_period = int(44100 / kick_frequency_hz)
             full_sine_waveform = generate_sine_waveform(samples_per_period=samples_per_period)
             kick_frequency_hz *= kick_decay
+        elif kick_mode_active and kick_holding:
+            nr_samples_kick_held += samples_per_period
+
+        if kick_holding and nr_samples_kick_held > kick_hold_samples:
+            kick_finished_hold = True
+            kick_holding = False
 
         waveform = np.concatenate([waveform,full_sine_waveform])
         remaining_samples_in_callback -= samples_per_period
@@ -137,6 +160,12 @@ def piano_roll_callback(outdata,frames,time,status):
 
     if kick_mode_active:
         kick_frequency_hz *= kick_decay
+
+    if kick_mode_active and kick_holding == False:
+        kick_frequency_hz *= kick_decay
+    elif kick_mode_active and kick_holding:
+        nr_samples_kick_held += samples_per_period
+
     outdata[:] = waveform[:frames].reshape(frames,1)
 
 async def task_finished():
