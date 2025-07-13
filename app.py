@@ -21,6 +21,7 @@ kick_decay = 0.5
 kick_finished_hold = False
 kick_holding = False
 nr_samples_kick_held = 0
+waveform_type = "sine"
 
 
 def piano_key_nr_to_string(piano_key_nr: int) -> str:
@@ -116,6 +117,7 @@ def piano_roll_callback(outdata,frames,time,status):
     global kick_start_frequency_hz
     global end_frequency_hz
     global prev_progress
+    global waveform_type
 
     global kick_finished_hold
     global kick_holding
@@ -135,8 +137,8 @@ def piano_roll_callback(outdata,frames,time,status):
         samples_per_period = int(44100 / end_frequency_hz)
 
     # Generate the remainder of the waveform that was abandoned when we ran out of frames in the previous callback.
-    remainder_waveform = generate_waveform(samples_per_period,start = prev_progress * np.pi * 2)
-    full_waveform = generate_waveform(samples_per_period)
+    remainder_waveform = generate_waveform(samples_per_period,start = prev_progress * np.pi * 2,waveform=waveform_type)
+    full_waveform = generate_waveform(samples_per_period,waveform=waveform_type)
 
     remaining_samples_in_callback = frames
 
@@ -147,7 +149,7 @@ def piano_roll_callback(outdata,frames,time,status):
     while remaining_samples_in_callback > samples_per_period:
         if kick_mode_active and kick_holding == False:
             samples_per_period = int(44100 / kick_frequency_hz)
-            full_waveform = generate_waveform(samples_per_period=samples_per_period)
+            full_waveform = generate_waveform(samples_per_period=samples_per_period,waveform=waveform_type)
             kick_frequency_hz *= kick_decay
         elif kick_mode_active and kick_holding:
             nr_samples_kick_held += samples_per_period
@@ -204,6 +206,7 @@ def piano_roll_key_handler(loop,key):
     global kick_mode_active
     global end_frequency_hz
     global piano_key_nr
+    global waveform_type
     global octave
 
     if key.upper() == "Z" and octave > 1:
@@ -212,6 +215,8 @@ def piano_roll_key_handler(loop,key):
     if key.upper() == "X" and octave < 6:
         octave += 1
         piano_key_nr += 12
+    if key == "9":
+        waveform_type = "sine" if waveform_type == "saw" else "saw"
 
     if keyboard_key_to_piano_key_nr(key) != -1:
         piano_key_nr = keyboard_key_to_piano_key_nr(key)
@@ -223,10 +228,12 @@ def piano_roll_key_handler(loop,key):
                                           nr_samples = int(44100 * 0.25))
 
     note_text = urwid.Text(f"Note: {piano_key_nr_to_string(piano_key_nr)}",align="center")
+    waveform_text = urwid.Text(f"Waveform: {waveform_type}",align="center")
     octave_down_text = urwid.Text("Z: Octave down",align="left")
     octave_up_text = urwid.Text("X: Octave up",align="left")
+    change_waveform_text = urwid.Text("9: Change waveform",align="left")
     exit_text = urwid.Text("Q: Stop audio",align="left")
-    pile = urwid.Pile([note_text,octave_down_text,octave_up_text,exit_text])
+    pile = urwid.Pile([note_text,waveform_text,octave_down_text,octave_up_text,change_waveform_text,exit_text])
     loop.widget = urwid.Filler(pile)
 
 def kick_mode_activate(loop):
