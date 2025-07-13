@@ -75,6 +75,9 @@ def generate_waveform(samples_per_period,**kwargs):
         else:
             return np.sin(x)
 
+    def saw(x):
+        return x / np.pi - 1
+
     start = kwargs["start"] if "start" in kwargs else 0
     end = np.pi * 2
 
@@ -83,7 +86,10 @@ def generate_waveform(samples_per_period,**kwargs):
         return np.array([])
 
     sample_indexes = np.linspace(start,end,nr_samples)
-    return np.apply_along_axis(sine,axis=0,arr=sample_indexes)
+    if "waveform" not in kwargs or "waveform" in kwargs and kwargs["waveform"] == "sine":
+        return np.apply_along_axis(sine,axis=0,arr=sample_indexes)
+    elif "waveform" in kwargs and kwargs["waveform"] == "saw":
+        return np.apply_along_axis(saw,axis=0,arr=sample_indexes)
 
 def calculate_kick_decay(start_frequency_hz: float,end_frequency_hz: float,nr_samples: int):
     nr_samples_delta = 250
