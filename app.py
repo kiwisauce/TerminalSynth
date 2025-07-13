@@ -93,21 +93,7 @@ def generate_waveform(samples_per_period,**kwargs):
         return np.apply_along_axis(saw,axis=0,arr=sample_indexes)
 
 def calculate_kick_decay(start_frequency_hz: float,end_frequency_hz: float,nr_samples: int):
-    nr_samples_delta = 250
-    decay_guess = 0.5
-    while True:
-        nr_samples_processed = 0
-        frequency_hz = start_frequency_hz
-        while frequency_hz > end_frequency_hz:
-            samples_per_period = int(44100 / frequency_hz)
-            nr_samples_processed += samples_per_period
-            frequency_hz *= decay_guess
-        if nr_samples_processed > nr_samples + nr_samples_delta:
-            decay_guess -= 0.000001
-        elif nr_samples_processed < nr_samples - nr_samples_delta:
-            decay_guess += 0.000001
-        else:
-            return decay_guess
+    return 1 + (1 - start_frequency_hz / end_frequency_hz) * (44100 / start_frequency_hz / nr_samples)
 
 def piano_roll_callback(outdata,frames,time,status):
     global kick_decay
