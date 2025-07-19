@@ -58,6 +58,8 @@ class Menu(MenuItem):
 
     def press_key(self,key) -> bool:
         finished = super().press_key(key)
+        if finished:
+            return True
         
         for child in self._children:
             child.press_key(key)
@@ -78,7 +80,7 @@ class Menu(MenuItem):
         if key == "enter":
             self._children[self._selection_idx].activate()
 
-        return finished
+        return False
 
     def activate(self) -> None:
         super().activate()
