@@ -64,6 +64,9 @@ class Menu(MenuItem):
         for child in self._children:
             child.press_key(key)
 
+        if not self.active:
+            return False
+
         if key == "up":
             if self._selection_idx == 0:
                 self._selection_idx = len(self._children) - 1
